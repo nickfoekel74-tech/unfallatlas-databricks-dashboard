@@ -130,7 +130,7 @@ sql/
 └── checks/                     Assertions je Transformationsschritt
 ```
 
-4. Dashboard-Definition aus [`dashboard/`](dashboard/) in den Workspace importieren
+4. Dashboard-Definition aus [`dashboard/`](Dashboard/) in den Workspace importieren
 
 Getestet mit Databricks Free Edition (Serverless SQL Warehouse, 2X-Small).
 
