@@ -1,0 +1,753 @@
+{
+  "datasets": [
+    {
+      "name": "5a5beaf1",
+      "displayName": "unfaelle",
+      "queryLines": [
+        "SELECT jahr, monat, wochentag, wochentag_nr, stunde, bundesland,\r\n",
+        "       COUNT(*)               AS unfaelle,\r\n",
+        "       COUNT_IF(ist_toedlich) AS toedliche\r\n",
+        "FROM unfaelle_silver\r\n",
+        "GROUP BY ALL;"
+      ],
+      "columns": [
+        {
+          "displayName": "wochentag_kuerzel",
+          "description": "Weekday abbreviations in German",
+          "expression": "CASE wochentag_nr WHEN 1 THEN 'Mo' WHEN 2 THEN 'Di' WHEN 3 THEN 'Mi' WHEN 4 THEN 'Do' WHEN 5 THEN 'Fr' WHEN 6 THEN 'Sa' WHEN 7 THEN 'So' END"
+        },
+        {
+          "displayName": "anteil_toedlich_pct",
+          "description": "",
+          "expression": "100.0 * SUM(toedliche) / SUM(unfaelle)"
+        }
+      ]
+    },
+    {
+      "name": "352b393a",
+      "displayName": "Verkehrsmittel",
+      "queryLines": [
+        "SELECT jahr, bundesland, verkehrsmittel, unfalltyp,\r\n",
+        "       COUNT(*)               AS beteiligungen,\r\n",
+        "       COUNT_IF(ist_toedlich) AS toedliche\r\n",
+        "FROM unfaelle_beteiligte\r\n",
+        "GROUP BY ALL;"
+      ],
+      "columns": [
+        {
+          "displayName": "toedliche_Beteiligung",
+          "description": "",
+          "expression": "100.0 * SUM(toedliche) / SUM(beteiligungen)"
+        },
+        {
+          "displayName": "verkehrsmittel_kurz",
+          "description": "Kurze Abkürzungen für Verkehrsmittel",
+          "expression": "CASE verkehrsmittel WHEN 'PKW' THEN 'PKW' WHEN 'Fahrrad' THEN 'Rad' WHEN 'Güterkraftfahrzeug' THEN 'LKW' WHEN 'Sonstige' THEN 'Sonst' WHEN 'Motorrad' THEN 'Moto' WHEN 'Fußgänger' THEN 'Fuß' ELSE verkehrsmittel END"
+        }
+      ]
+    },
+    {
+      "name": "e0f7c28a",
+      "displayName": "Karte",
+      "queryLines": [
+        "SELECT jahr, bundesland, ROUND(lat,1) AS lat, ROUND(lon,1) AS lon,\r\n",
+        "       COUNT(*)               AS unfaelle,\r\n",
+        "       COUNT_IF(ist_toedlich) AS toedliche\r\n",
+        "FROM unfaelle_silver\r\n",
+        "WHERE lat BETWEEN 47 AND 56 AND lon BETWEEN 5 AND 16\r\n",
+        "GROUP BY ALL\r\n",
+        "HAVING COUNT(*) >= 5;"
+      ]
+    },
+    {
+      "name": "35e65262",
+      "displayName": "Bundeslaender",
+      "queryLines": [
+        "SELECT\r\n",
+        "  s.jahr,\r\n",
+        "  s.bundesland,\r\n",
+        "  e.einwohner,\r\n",
+        "  COUNT(*)                 AS unfaelle,\r\n",
+        "  COUNT_IF(s.ist_toedlich) AS toedliche\r\n",
+        "FROM unfaelle_silver s\r\n",
+        "JOIN bundesland_einwohner e ON s.bundesland = e.bundesland\r\n",
+        "GROUP BY ALL;"
+      ],
+      "columns": [
+        {
+          "displayName": "Unfaelle verteilt auf Bundesländer",
+          "description": "",
+          "expression": "100000.0 * SUM(unfaelle) / MAX(einwohner) / COUNT(DISTINCT jahr)"
+        }
+      ]
+    }
+  ],
+  "pages": [
+    {
+      "name": "28833a4f",
+      "displayName": "Dashboard",
+      "layout": [
+        {
+          "widget": {
+            "name": "wochen",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "5a5beaf1",
+                  "fields": [
+                    {
+                      "name": "sum(unfaelle)",
+                      "expression": "SUM(`unfaelle`)"
+                    },
+                    {
+                      "name": "stunde",
+                      "expression": "`stunde`"
+                    },
+                    {
+                      "name": "wochentag_kuerzel",
+                      "expression": "`wochentag_kuerzel`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "frame": {
+                "showTitle": true,
+                "title": "Unfallhäufigkeit nach Wochentag und Uhrzeit"
+              },
+              "widgetType": "heatmap",
+              "encodings": {
+                "x": {
+                  "fieldName": "stunde",
+                  "displayName": "Uhrzeit",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "y": {
+                  "fieldName": "wochentag_kuerzel",
+                  "axis": {
+                    "hideTitle": true
+                  },
+                  "scale": {
+                    "type": "categorical",
+                    "sort": {
+                      "by": "custom-order",
+                      "orderedValues": [
+                        "So",
+                        "Sa",
+                        "Fr",
+                        "Do",
+                        "Mi",
+                        "Di",
+                        "Mo"
+                      ]
+                    }
+                  }
+                },
+                "color": {
+                  "fieldName": "sum(unfaelle)",
+                  "displayName": "Unfaelle",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "label": {
+                  "show": false
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 8,
+            "width": 12,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "u",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "5a5beaf1",
+                  "fields": [
+                    {
+                      "name": "jahr",
+                      "expression": "`jahr`"
+                    },
+                    {
+                      "name": "sum(unfaelle)",
+                      "expression": "SUM(`unfaelle`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "frame": {
+                "showTitle": true,
+                "title": "Unfälle Gesamt Verlauf über die Jahre",
+                "showDescription": true,
+                "description": "Rückgang 2020/21, neuer Höchststand 2025"
+              },
+              "widgetType": "line",
+              "encodings": {
+                "x": {
+                  "fieldName": "jahr",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "y": {
+                  "fieldName": "sum(unfaelle)",
+                  "displayName": "Unfaelle",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 4,
+            "width": 12,
+            "height": 4
+          }
+        },
+        {
+          "widget": {
+            "name": "gesam",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "5a5beaf1",
+                  "fields": [
+                    {
+                      "name": "sum(unfaelle)",
+                      "expression": "SUM(`unfaelle`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "showTitle": true,
+                "title": "Gesamtanzahl Unfälle"
+              },
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(unfaelle)",
+                  "style": {
+                    "color": "#1f77b4",
+                    "bold": true
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 2,
+            "width": 4,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "ant",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "5a5beaf1",
+                  "fields": [
+                    {
+                      "name": "sum(toedliche)",
+                      "expression": "SUM(`toedliche`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "showTitle": true,
+                "title": "Tödliche Unfälle"
+              },
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(toedliche)",
+                  "style": {
+                    "color": "#d62728",
+                    "bold": true
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 2,
+            "width": 4,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "an1",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "5a5beaf1",
+                  "fields": [
+                    {
+                      "name": "measure(anteil_toedlich_pct)",
+                      "expression": "MEASURE(`anteil_toedlich_pct`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": "Tödlichkeitsrate"
+              },
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "measure(anteil_toedlich_pct)",
+                  "formatTemplate": "{{ @formatted }}%",
+                  "style": {
+                    "color": "#d62728",
+                    "bold": true
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 8,
+            "y": 2,
+            "width": 4,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "unfaelle-je-100000-einwohner-nach-bundesland",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "35e65262",
+                  "fields": [
+                    {
+                      "name": "measure(Unfaelle verteilt auf Bundesländer)",
+                      "expression": "MEASURE(`Unfaelle verteilt auf Bundesländer`)"
+                    },
+                    {
+                      "name": "bundesland",
+                      "expression": "`bundesland`"
+                    }
+                  ],
+                  "disaggregated": false,
+                  "orders": [
+                    {
+                      "direction": "DESC",
+                      "expression": "MEASURE(`Unfaelle verteilt auf Bundesländer`)"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "frame": {
+                "showTitle": true,
+                "title": "Unfälle je 100.000 Einwohner nach Bundesland"
+              },
+              "mark": {
+                "colors": [
+                  "#1f77b4"
+                ]
+              },
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "measure(Unfaelle verteilt auf Bundesländer)",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "y": {
+                  "fieldName": "bundesland",
+                  "axis": {
+                    "hideTitle": true
+                  },
+                  "scale": {
+                    "type": "categorical",
+                    "sort": {
+                      "by": "measure-reversed",
+                      "measure": {
+                        "fieldName": "measure(Unfaelle verteilt auf Bundesländer)"
+                      }
+                    }
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 20,
+            "width": 6,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "beteiligte-verkehrsmittel",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "352b393a",
+                  "fields": [
+                    {
+                      "name": "verkehrsmittel_kurz",
+                      "expression": "`verkehrsmittel_kurz`"
+                    },
+                    {
+                      "name": "sum(beteiligungen)",
+                      "expression": "SUM(`beteiligungen`)"
+                    }
+                  ],
+                  "disaggregated": false,
+                  "orders": [
+                    {
+                      "direction": "DESC",
+                      "expression": "SUM(`beteiligungen`)"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "frame": {
+                "showTitle": true,
+                "title": "Beteiligte Verkehrsmittel"
+              },
+              "mark": {
+                "colors": [
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 1
+                  },
+                  "#9467bd",
+                  "#8c564b",
+                  "#e377c2",
+                  "#7f7f7f",
+                  "#bcbd22",
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 7
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 8
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 9
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 10
+                  }
+                ]
+              },
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "verkehrsmittel_kurz",
+                  "axis": {
+                    "hideTitle": true,
+                    "labelAngle": 0
+                  },
+                  "scale": {
+                    "type": "categorical",
+                    "sort": {
+                      "by": "measure-reversed",
+                      "measure": {
+                        "fieldName": "sum(beteiligungen)"
+                      }
+                    }
+                  }
+                },
+                "y": {
+                  "fieldName": "sum(beteiligungen)",
+                  "displayName": " ",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 14,
+            "width": 6,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "anteil-toedlich-je-verkehrsmittel",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "352b393a",
+                  "fields": [
+                    {
+                      "name": "verkehrsmittel_kurz",
+                      "expression": "`verkehrsmittel_kurz`"
+                    },
+                    {
+                      "name": "measure(toedliche_Beteiligung)",
+                      "expression": "MEASURE(`toedliche_Beteiligung`)"
+                    }
+                  ],
+                  "disaggregated": false,
+                  "orders": [
+                    {
+                      "direction": "DESC",
+                      "expression": "MEASURE(`toedliche_Beteiligung`)"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "frame": {
+                "showTitle": true,
+                "title": "Tödlichkeitsrate nach Verkehrsmittel"
+              },
+              "mark": {
+                "colors": [
+                  "#d62728",
+                  "#ff7f0e",
+                  "#ffbb78",
+                  "#ff9896",
+                  "#c5b0d5",
+                  "#c49c94"
+                ]
+              },
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "verkehrsmittel_kurz",
+                  "axis": {
+                    "hideTitle": true,
+                    "labelAngle": 0
+                  },
+                  "scale": {
+                    "type": "categorical",
+                    "sort": {
+                      "by": "measure-reversed",
+                      "measure": {
+                        "fieldName": "measure(toedliche_Beteiligung)"
+                      }
+                    }
+                  }
+                },
+                "y": {
+                  "fieldName": "measure(toedliche_Beteiligung)",
+                  "displayName": " ",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 14,
+            "width": 6,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "unfalltypen-nach-verkehrsmitteln",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "352b393a",
+                  "fields": [
+                    {
+                      "name": "unfalltyp",
+                      "expression": "`unfalltyp`"
+                    },
+                    {
+                      "name": "verkehrsmittel_kurz",
+                      "expression": "`verkehrsmittel_kurz`"
+                    },
+                    {
+                      "name": "sum(beteiligungen)",
+                      "expression": "SUM(`beteiligungen`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "frame": {
+                "showTitle": true,
+                "title": "Unfalltypen nach Verkehrsmittel"
+              },
+              "mark": {
+                "colors": [
+                  "#1f77b4",
+                  "#ff7f0e",
+                  "#2ca02c",
+                  "#d62728",
+                  "#9467bd",
+                  "#8c564b",
+                  "#e377c2",
+                  "#7f7f7f"
+                ]
+              },
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "verkehrsmittel_kurz",
+                  "axis": {
+                    "labelAngle": 0
+                  },
+                  "displayName": " ",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "y": {
+                  "fieldName": "sum(beteiligungen)",
+                  "displayName": " ",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "color": {
+                  "fieldName": "unfalltyp",
+                  "scale": {
+                    "type": "categorical",
+                    "mappings": [
+                      {
+                        "value": "Längsverkehr",
+                        "color": "#A1A3FC"
+                      }
+                    ]
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 20,
+            "width": 6,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "9ed9f65c",
+            "multilineTextboxSpec": {
+              "lines": [
+                "<span style=\"text-align:center;display:block\"><span style=\"font-size:24px;color:#FFFFFF\">**Verkehrsunfälle in Deutschland 2019-2025**</span></span>\n",
+                "\n",
+                "<span style=\"text-align:center;display:block;\">Unfallatlas der Statistischen Ämter · nur Unfälle mit Personenschaden</span>"
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 12,
+            "height": 2
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1"
+    },
+    {
+      "name": "a0b12cf3",
+      "displayName": "Global Filters",
+      "pageType": "PAGE_TYPE_GLOBAL_FILTERS",
+      "layoutVersion": "GRID_V1"
+    }
+  ],
+  "uiSettings": {
+    "theme": {
+      "widgetHeaderAlignment": "ALIGNMENT_UNSPECIFIED"
+    },
+    "applyModeEnabled": false
+  }
+}
