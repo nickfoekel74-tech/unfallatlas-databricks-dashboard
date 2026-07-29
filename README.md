@@ -2,7 +2,7 @@
 
 End-to-End-Analyse von 1,81 Mio. Verkehrsunfällen mit Personenschaden auf Basis des amtlichen Unfallatlas — von der Rohdaten-Ingestion über einen Medallion-Layer in Databricks bis zum interaktiven AI/BI-Dashboard.
 
-![Dashboard-Übersicht](docs/screenshots/dashboard-uebersicht.png)
+![Dashboard-Übersicht](docs/screenshots/Dashboard-gesamt.png)
 
 ---
 
