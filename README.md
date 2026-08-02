@@ -61,14 +61,22 @@ CSV (7 Jahrgänge)
 
 ## Datenqualität
 
-Die Rohdaten enthalten drei Inkonsistenzen, die ohne explizite Prüfung stillschweigend zu falschen Ergebnissen geführt hätten:
+Die Rohdaten enthalten mehrere Inkonsistenzen, die ohne explizite Prüfung stillschweigend zu falschen Ergebnissen geführt hätten. Allen gemeinsam ist, dass keine davon eine Fehlermeldung auslöst — das Ergebnis sieht in jedem Fall plausibel aus.
 
 ### 1. Schema-Drift zwischen den Jahrgängen
 
-Die Spalte für den Straßenzustand heißt in den Jahrgängen 2019–2020 `STRZUSTAND`, ab 2021 `IstStrassenzustand` — bei identischer Codierung. Analog `OBJECTID` gegenüber `OID_`.
+Spaltennamen wechseln über die Jahrgänge, bei identischer Codierung:
+
+| Inhalt | Schreibweisen | Verfügbarkeit |
+|---|---|---|
+| Straßenzustand | `STRZUSTAND` / `IstStrassenzustand` | 2019–2020 bzw. ab 2021 |
+| Identifikator (GIS-Export) | `OBJECTID` / `OID_` | nicht in allen Jahrgängen |
+| Identifikator (Statistikämter) | `UIDENTSTLAE` | alle Jahrgänge außer 2019 |
 
 *Erkennung:* `COUNT(spalte)` je Jahrgang zählt nur Nicht-NULL-Werte. Eine 0 zeigt an, dass die Spalte im jeweiligen Jahrgang fehlt.
-*Lösung:* `mergeSchema` beim Laden, Zusammenführung per `COALESCE` im Silver-Layer.
+*Lösung:* `mergeSchema` beim Laden, damit keine Variante stillschweigend verworfen wird; Zusammenführung per `COALESCE` im Silver-Layer.
+
+**Hinweis zur Typisierung:** `UIDENTSTLAE` ist ein 19-stelliger Schlüssel und wird als `STRING` geführt. Eine numerische Typisierung würde die Werte auf 15 signifikante Stellen runden und damit verschiedene Unfälle ununterscheidbar machen — ebenfalls ohne Fehlermeldung.
 
 ### 2. Jahrgangsweise zurückgesetzte Primärschlüssel
 
@@ -77,12 +85,25 @@ Die Spalte für den Straßenzustand heißt in den Jahrgängen 2019–2020 `STRZU
 *Erkennung:* Vergleich von `COUNT(*)` und `COUNT(DISTINCT unfall_id)`.
 *Lösung:* Zusammengesetzter Schlüssel aus Jahr und Satznummer.
 
-### 3. NULL-Semantik von `CONCAT_WS`
+### 3. Unvollständige COALESCE-Kette, maskiert durch `CONCAT_WS`
 
-`CONCAT_WS` überspringt NULL-Argumente stillschweigend, statt NULL zurückzugeben. Da der Jahrgang 2025 weder `OBJECTID` noch `OID_` führt, kollabierten dort alle 273.007 Zeilen auf den Schlüsselwert `'2025'` — ohne Fehlermeldung.
+Der Fix aus Punkt 2 hat zunächst lautlos versagt — ein eingebauter Fehler, kein Problem der Quelle. Zwei Ursachen greifen ineinander:
+
+**Ursache:** Die COALESCE-Kette zur Schlüsselbildung deckte nur `OBJECTID` und `OID_` ab, nicht die dritte Schreibweise `UIDENTSTLAE`. Für Jahrgänge ohne die beiden erstgenannten Spalten ergab `COALESCE(OBJECTID, OID_)` daher NULL.
+
+**Maskierung:** Zum Zusammensetzen wurde `CONCAT_WS` verwendet. Diese Funktion überspringt NULL-Argumente stillschweigend, statt NULL zurückzugeben:
+
+```sql
+CONCAT   (jahr, '_', NULL)   -- → NULL,  sofort erkennbar
+CONCAT_WS('_', jahr, NULL)   -- → jahr,  sieht aus wie ein gültiger Schlüssel
+```
+
+Im betroffenen Jahrgang kollabierten dadurch 273.007 Zeilen auf einen einzigen Schlüsselwert — ohne Fehlermeldung. Mit `CONCAT` wäre ein NULL-Schlüssel entstanden und beim Eindeutigkeitscheck sofort aufgefallen.
 
 *Erkennung:* derselbe Eindeutigkeitscheck wie unter 2., nach dem vermeintlichen Fix erneut ausgeführt.
-*Lösung:* Fallback auf einen generierten Ersatzschlüssel, kenntlich am Präfix `gen`.
+*Lösung:* `UIDENTSTLAE` in die COALESCE-Kette aufgenommen, `CONCAT` statt `CONCAT_WS`, zusätzlich Fallback auf einen generierten Ersatzschlüssel (Präfix `gen`) für den Fall, dass keine der drei Spalten greift.
+
+**Nachvollziehbarkeit der Schlüsselherkunft:** `OBJECTID`/`OID_` (laufende Exportnummer) und `UIDENTSTLAE` (Kennung der Statistikämter) sind inhaltlich nicht dasselbe. Der Silver-Layer führt deshalb eine Spalte `unfall_id_quelle`, die festhält, aus welcher Quelle der Schlüssel je Zeile stammt.
 
 **Übergreifend:** Jeder Transformationsschritt wird durch eine Assertion abgesichert (Zeilenzahl je Jahrgang, Schlüsseleindeutigkeit, Vollständigkeit der Code-Übersetzung, Referenzintegrität zwischen Silver und Beteiligten-Tabelle). Die Prüfqueries liegen unter [`sql/checks/`](sql/checks/).
 
@@ -111,6 +132,7 @@ Bewusst dokumentiert, weil sie die Interpretierbarkeit direkt begrenzen:
 - **Unfallkategorie = schwerste Folge.** Ein Unfall mit einem und einer mit zwölf Schwerverletzten zählen gleich. Die Daten enthalten keine Verletztenzahlen.
 - **Beteiligungen überlappen.** Ein tödlicher Unfall zwischen LKW und Radfahrer geht in beide Verkehrsmittel-Kategorien ein.
 - **Einwohnerzahlen als Näherung.** Die Normierung je 100.000 Einwohner nutzt einen einzelnen Stichtag, nicht jahresgenaue Werte.
+- **Uneinheitliche Schlüsselherkunft.** Der Unfall-Schlüssel stammt je nach Jahrgang aus unterschiedlichen Quellspalten (siehe `unfall_id_quelle`). Für Eindeutigkeit und Joins ist das unkritisch, für Vergleiche auf Schlüsselebene über Jahrgangsgrenzen hinweg jedoch zu beachten.
 
 ---
 
